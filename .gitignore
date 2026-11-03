@@ -1,0 +1,42 @@
+# Local authoring assets and historical document packages
+/.work/
+/*.zip
+/收纳*/
+
+# Secrets and local data
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.sqlite
+*.sqlite3
+*.db
+*.db-*
+*.sqlite-*
+*.sqlite3-*
+/data/private/
+/data/raw/
+/uploads/
+/models/
+*.pt
+*.pth
+*.onnx
+*.safetensors
+
+# Runtime and builds
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+node_modules/
+dist/
+build/
+*.log
+.DS_Store
+Thumbs.db
+~$*
