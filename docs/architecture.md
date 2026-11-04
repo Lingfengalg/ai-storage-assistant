@@ -30,6 +30,8 @@ docs/               技术、启动、模块与任务说明
 
 所有尺寸使用正整数毫米。物品位置指包围盒左前下角；在某层板上使用 `x` 和 `y` 表示平面坐标。`x` 向右，`y` 向后；高度方向为 `z`，物品底部高度由层板 `elevation` 决定。
 
+一层可以横向分成多个格子：`Shelf.columns` 是格子数，`Shelf.divider` 是竖向隔板厚度。可用宽度等于层宽减去 `(columns-1) × divider`，用 `divmod` 均分，余数优先给左侧格子（`geometry.compartment_spans`）。`Placement.column` 指明格子序号，`Placement.x` 是**该格子内**的横向偏移。因此不同格子的局部坐标可以重合而不算重叠，跨隔板摆放则必须被拒绝：`fits()` 用格子宽度约束 `x + w`，`overlaps()` 只比较同层同格的物品。单列时退化为整层宽度，行为与引入格子之前一致。
+
 Three.js 约定 Y 轴向上，因此转换为 `(domain.x, domain.z, domain.y)`，再由左前下角转盒体中心。尺寸依然是毫米，不隐式除以 1000。90° 旋转只交换宽与深，高度不变。
 
 目前没有自由堆叠。接触允许，严格体积相交不允许；这不意味着真实空间无需拿取余量。入口、拿取、稳定性与测量误差尚未建模。
@@ -60,6 +62,7 @@ Three.js 约定 Y 轴向上，因此转换为 `(domain.x, domain.z, domain.y)`�
 | --- | --- | --- |
 | `/api/health` | GET | 本地服务状态 |
 | `/api/scene` | GET | 当前持久化场景 |
+| `/api/scene/structure` | POST | 由外部尺寸推导柜体骨架，**仅预览，不落库** |
 | `/api/plans` | POST | 基于指定版本生成并保存建议，不改库存 |
 | `/api/plans/{id}/apply` | POST | 验证版本及执行确认，更新真实记录 |
 | `/api/items/{id}/movable` | PATCH | 锁定或解锁在库物品 |

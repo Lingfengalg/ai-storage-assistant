@@ -39,6 +39,45 @@
         }
       }
     },
+    "/api/scene/structure": {
+      "post": {
+        "summary": "Build Structure",
+        "description": "Derive a multi-column cabinet skeleton; preview only, never written to the store.",
+        "operationId": "build_structure_api_scene_structure_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StructureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scene"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plans": {
       "post": {
         "summary": "Create Plan",
@@ -417,6 +456,13 @@
             "type": "string",
             "title": "Shelf Id"
           },
+          "column": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Column",
+            "default": 0
+          },
           "x": {
             "type": "integer",
             "minimum": 0.0,
@@ -581,6 +627,20 @@
             "type": "integer",
             "minimum": 0.0,
             "title": "Elevation"
+          },
+          "columns": {
+            "type": "integer",
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Columns",
+            "default": 1
+          },
+          "divider": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Divider",
+            "default": 18
           }
         },
         "additionalProperties": false,
@@ -622,6 +682,72 @@
           "height"
         ],
         "title": "Size"
+      },
+      "StructureRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "rows": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Rows"
+          },
+          "columns": {
+            "type": "integer",
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Columns"
+          },
+          "width": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Width"
+          },
+          "depth": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Depth"
+          },
+          "height": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Height"
+          },
+          "board": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Board",
+            "default": 18
+          },
+          "divider": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Divider",
+            "default": 18
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "rows",
+          "columns",
+          "width",
+          "depth",
+          "height"
+        ],
+        "title": "StructureRequest",
+        "description": "External cabinet dimensions in mm; the backend derives the shelf Scene."
       },
       "ValidationError": {
         "properties": {

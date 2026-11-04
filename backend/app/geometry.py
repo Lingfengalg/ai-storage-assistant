@@ -9,13 +9,32 @@ def footprint(item: Item, place: Placement) -> tuple[int, int]:
     )
 
 
+def compartment_spans(shelf: Shelf) -> list[tuple[int, int]]:
+    """Return each compartment's (x_offset, width) inside the shelf.
+
+    The usable width is divided with ``divmod``; leftover millimetres go to the
+    leftmost compartments so the spans always sum to the usable width.
+    """
+    usable = shelf.size.width - (shelf.columns - 1) * shelf.divider
+    base, remainder = divmod(usable, shelf.columns)
+    spans = []
+    x = 0
+    for index in range(shelf.columns):
+        width = base + (1 if index < remainder else 0)
+        spans.append((x, width))
+        x += width + shelf.divider
+    return spans
+
+
 def fits(item: Item, place: Placement, shelf: Shelf) -> bool:
+    if place.shelf_id != shelf.id or not 0 <= place.column < shelf.columns:
+        return False
     w, d = footprint(item, place)
+    compartment_width = compartment_spans(shelf)[place.column][1]
     return (
-        place.shelf_id == shelf.id
-        and place.x >= 0
+        place.x >= 0
         and place.y >= 0
-        and place.x + w <= shelf.size.width
+        and place.x + w <= compartment_width
         and place.y + d <= shelf.size.depth
         and item.size.height <= shelf.size.height
         and (not place.rotated or item.allow_rotation)
@@ -23,7 +42,8 @@ def fits(item: Item, place: Placement, shelf: Shelf) -> bool:
 
 
 def overlaps(a: Item, pa: Placement, b: Item, pb: Placement) -> bool:
-    if pa.shelf_id != pb.shelf_id:
+    # A divider keeps different compartments apart even when their local coordinates coincide.
+    if pa.shelf_id != pb.shelf_id or pa.column != pb.column:
         return False
     aw, ad = footprint(a, pa)
     bw, bd = footprint(b, pb)

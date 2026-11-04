@@ -13,6 +13,9 @@ from .models import (
     LockRequest,
     Plan,
     Scene,
+    Shelf,
+    Size,
+    StructureRequest,
     VersionedRequest,
 )
 from .planning import plan_scene
@@ -41,6 +44,38 @@ def create_app(db_path: Path | None = None) -> FastAPI:
     @app.get("/api/scene", response_model=Scene)
     def read_scene():
         return store.scene()
+
+    @app.post("/api/scene/structure", response_model=Scene)
+    def build_structure(body: StructureRequest):
+        """Derive a multi-column cabinet skeleton; preview only, never written to the store."""
+        inner_width = body.width - 2 * body.board
+        inner_depth = body.depth - body.board
+        net_height = (body.height - (body.rows + 1) * body.board) // body.rows
+        if inner_width <= 0 or inner_depth <= 0:
+            raise DomainError("外部尺寸不足以容纳板厚", 422)
+        if net_height < 100:
+            raise DomainError("每层净高不足 100 mm，请增加外高或减少层数", 422)
+        if inner_width - (body.columns - 1) * body.divider <= 0:
+            raise DomainError("内部宽度不足以容纳竖向隔板", 422)
+        shelves = [
+            Shelf(
+                id=f"row-{index + 1}",
+                name=f"第 {index + 1} 层",
+                size=Size(width=inner_width, depth=inner_depth, height=net_height),
+                elevation=body.board + index * (net_height + body.board),
+                columns=body.columns,
+                divider=body.divider,
+            )
+            for index in range(body.rows)
+        ]
+        return Scene(
+            id=f"structure-{body.rows}x{body.columns}-{body.width}x{body.depth}x{body.height}",
+            name=body.name,
+            version=1,
+            source="user",
+            shelves=shelves,
+            items=[],
+        )
 
     @app.post("/api/plans", response_model=Plan)
     def create_plan(body: VersionedRequest):

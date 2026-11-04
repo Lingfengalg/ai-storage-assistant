@@ -413,6 +413,54 @@ h3 {
   font-size: 12px;
   white-space: nowrap;
 }
+.structure {
+  margin-top: 18px;
+  padding: 22px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.structure-copy h2 {
+  font-size: 18px;
+  margin: 8px 0;
+}
+.structure-copy p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+  max-width: 430px;
+}
+.structure-copy .structure-note {
+  margin-top: 8px;
+  color: #8f4b2b;
+}
+.structure-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.structure-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.structure-form input {
+  width: 78px;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #f6f8f6;
+  font-size: 12px;
+}
+.structure-form .primary {
+  font-size: 12px;
+  white-space: nowrap;
+}
 .activity {
   padding: 22px;
 }

@@ -3,7 +3,34 @@
 from uuid import uuid4
 
 from .geometry import fits, footprint, overlaps, validate_layout
-from .models import Placement, Plan, Scene
+from .models import Item, Placement, Plan, Scene, Shelf
+
+
+def _candidate_in_compartment(
+    item: Item,
+    shelf: Shelf,
+    column: int,
+    placed: dict[str, Placement],
+    items: dict[str, Item],
+) -> Placement | None:
+    """First free candidate inside one compartment, keeping the historical scan order."""
+    # Cross-products of existing right/back edges are a small candidate set.
+    xs, ys = {0}, {0}
+    for other_id, pos in placed.items():
+        if pos.shelf_id == shelf.id and pos.column == column:
+            w, d = footprint(items[other_id], pos)
+            xs.add(pos.x + w)
+            ys.add(pos.y + d)
+    for y in sorted(ys):
+        for x in sorted(xs):
+            for rotation in [False, True] if item.allow_rotation else [False]:
+                pos = Placement(shelf_id=shelf.id, column=column, x=x, y=y, rotated=rotation)
+                if fits(item, pos, shelf) and not any(
+                    overlaps(item, pos, items[other_id], other)
+                    for other_id, other in placed.items()
+                ):
+                    return pos
+    return None
 
 
 def plan_scene(scene: Scene) -> Plan:
@@ -16,24 +43,9 @@ def plan_scene(scene: Scene) -> Plan:
     ):
         chosen = None
         for shelf in scene.shelves:
-            # Cross-products of existing right/back edges are a small candidate set.
-            xs, ys = {0}, {0}
-            for oid, pos in placed.items():
-                if pos.shelf_id == shelf.id:
-                    w, d = footprint(items[oid], pos)
-                    xs.add(pos.x + w)
-                    ys.add(pos.y + d)
-            for y in sorted(ys):
-                for x in sorted(xs):
-                    for rotation in [False, True] if item.allow_rotation else [False]:
-                        pos = Placement(shelf_id=shelf.id, x=x, y=y, rotated=rotation)
-                        if fits(item, pos, shelf) and not any(
-                            overlaps(item, pos, items[oid], p) for oid, p in placed.items()
-                        ):
-                            chosen = pos
-                            break
-                    if chosen:
-                        break
+            # Shelves stay in scene order; within a shelf compartments are filled left to right.
+            for column in range(shelf.columns):
+                chosen = _candidate_in_compartment(item, shelf, column, placed, items)
                 if chosen:
                     break
             if chosen:

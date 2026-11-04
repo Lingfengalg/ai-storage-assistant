@@ -38,6 +38,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/scene/structure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Build Structure
+         * @description Derive a multi-column cabinet skeleton; preview only, never written to the store.
+         */
+        post: operations["build_structure_api_scene_structure_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plans": {
         parameters: {
             query?: never;
@@ -205,6 +225,11 @@ export interface components {
         Placement: {
             /** Shelf Id */
             shelf_id: string;
+            /**
+             * Column
+             * @default 0
+             */
+            column: number;
             /** X */
             x: number;
             /** Y */
@@ -277,6 +302,16 @@ export interface components {
             size: components["schemas"]["Size"];
             /** Elevation */
             elevation: number;
+            /**
+             * Columns
+             * @default 1
+             */
+            columns: number;
+            /**
+             * Divider
+             * @default 18
+             */
+            divider: number;
         };
         /** Size */
         Size: {
@@ -286,6 +321,34 @@ export interface components {
             depth: number;
             /** Height */
             height: number;
+        };
+        /**
+         * StructureRequest
+         * @description External cabinet dimensions in mm; the backend derives the shelf Scene.
+         */
+        StructureRequest: {
+            /** Name */
+            name: string;
+            /** Rows */
+            rows: number;
+            /** Columns */
+            columns: number;
+            /** Width */
+            width: number;
+            /** Depth */
+            depth: number;
+            /** Height */
+            height: number;
+            /**
+             * Board
+             * @default 18
+             */
+            board: number;
+            /**
+             * Divider
+             * @default 18
+             */
+            divider: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -350,6 +413,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Scene"];
+                };
+            };
+        };
+    };
+    build_structure_api_scene_structure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StructureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Scene"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
