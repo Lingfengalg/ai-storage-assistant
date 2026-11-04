@@ -1,0 +1,3 @@
+# Web-only validation; VGGT, PyTorch, model weights and GPU drivers are separate.
+Flask>=3.0,<4
+Pillow>=10,<13
