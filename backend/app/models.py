@@ -17,6 +17,8 @@ class Size(Model):
 
 class Placement(Model):
     shelf_id: str
+    # Compartment index within the shelf; x is the horizontal offset inside that compartment.
+    column: int = Field(default=0, ge=0, le=3, strict=True)
     x: int = Field(ge=0, strict=True)
     y: int = Field(ge=0, strict=True)
     rotated: bool = False
@@ -27,6 +29,8 @@ class Shelf(Model):
     name: str
     size: Size
     elevation: int = Field(ge=0, strict=True)
+    columns: int = Field(default=1, ge=1, le=4, strict=True)
+    divider: int = Field(default=18, ge=0, le=100, strict=True)
 
 
 class Item(Model):
@@ -77,6 +81,19 @@ class LockRequest(Mutation):
 
 class ApplyRequest(Mutation):
     execution_confirmed: Literal[True]
+
+
+class StructureRequest(Model):
+    """External cabinet dimensions in mm; the backend derives the shelf Scene."""
+
+    name: str = Field(min_length=1, max_length=100)
+    rows: int = Field(ge=1, le=10, strict=True)
+    columns: int = Field(ge=1, le=4, strict=True)
+    width: int = Field(gt=0, le=10000, strict=True)
+    depth: int = Field(gt=0, le=10000, strict=True)
+    height: int = Field(gt=0, le=10000, strict=True)
+    board: int = Field(default=18, ge=0, le=100, strict=True)
+    divider: int = Field(default=18, ge=0, le=100, strict=True)
 
 
 class Plan(Model):

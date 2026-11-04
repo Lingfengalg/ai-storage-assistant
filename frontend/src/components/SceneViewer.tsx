@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { Plan, Scene } from "../api/client";
-import { boxTransform, categoryColors } from "../geometry";
+import { boxTransform, categoryColors, compartmentSpans } from "../geometry";
 
 type Props = {
   scene: Scene;
@@ -79,6 +79,22 @@ export default function SceneViewer({
         [shelf.size.width / 2, shelf.elevation - 8, shelf.size.depth / 2],
         "#c9d1cb",
       );
+      if (shelf.columns > 1 && shelf.divider > 0) {
+        const spans = compartmentSpans(shelf);
+        for (let index = 0; index < spans.length - 1; index += 1) {
+          const dividerX =
+            spans[index][0] + spans[index][1] + shelf.divider / 2;
+          box(
+            [shelf.divider, shelf.size.height, shelf.size.depth],
+            [
+              dividerX,
+              shelf.elevation + shelf.size.height / 2,
+              shelf.size.depth / 2,
+            ],
+            "#aebbb2",
+          );
+        }
+      }
     }
     const maxHeight = Math.max(
       ...scene.shelves.map((s) => s.elevation + s.size.height),

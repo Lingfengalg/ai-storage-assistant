@@ -4,6 +4,7 @@ export type Scene = components["schemas"]["Scene"];
 export type Item = components["schemas"]["Item"];
 export type Placement = components["schemas"]["Placement"];
 export type Plan = components["schemas"]["Plan"];
+export type StructureRequest = components["schemas"]["StructureRequest"];
 export type InventoryEvent = {
   request_id: string;
   operation: { route: string; action?: string; item_id?: string };
@@ -54,6 +55,8 @@ export const api = {
       },
       "PATCH",
     ),
+  structure: (body: StructureRequest) =>
+    request<Scene>("/scene/structure", body),
   apply: (plan: Plan, version: number) =>
     request<Scene>(`/plans/${plan.id}/apply`, {
       request_id: crypto.randomUUID(),

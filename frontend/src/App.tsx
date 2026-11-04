@@ -1,7 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, type InventoryEvent, type Plan, type Scene } from "./api/client";
 import SceneViewer from "./components/SceneViewer";
 import { categoryColors } from "./geometry";
+
+const initialStructure = {
+  rows: 2,
+  columns: 2,
+  width: 900,
+  depth: 400,
+  height: 800,
+  board: 18,
+  divider: 18,
+};
+type StructureField = keyof typeof initialStructure;
 
 export default function App() {
   const [scene, setScene] = useState<Scene | null>(null);
@@ -14,6 +25,8 @@ export default function App() {
   const [message, setMessage] = useState("");
   const [query, setQuery] = useState("");
   const [confirmApply, setConfirmApply] = useState(false);
+  const [structure, setStructure] = useState(initialStructure);
+  const [structurePreview, setStructurePreview] = useState(false);
   const select = useCallback((id: string) => setSelectedId(id), []);
   async function refresh() {
     const [next, history] = await Promise.all([api.scene(), api.events()]);
@@ -22,6 +35,7 @@ export default function App() {
     setPlan(null);
     setPreview(false);
     setConfirmApply(false);
+    setStructurePreview(false);
   }
   useEffect(() => {
     let active = true;
@@ -50,6 +64,31 @@ export default function App() {
     } finally {
       setBusy(false);
     }
+  }
+  function updateStructure(field: StructureField, raw: string) {
+    const parsed = raw === "" ? 0 : Math.trunc(Number(raw));
+    setStructure((current) => ({
+      ...current,
+      [field]: Number.isFinite(parsed) ? parsed : 0,
+    }));
+  }
+  async function buildStructure(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await run(async () => {
+      const next = await api.structure({
+        name: `结构柜 · ${structure.rows} 层 × ${structure.columns} 列`,
+        ...structure,
+      });
+      setScene(next);
+      setPlan(null);
+      setPreview(false);
+      setConfirmApply(false);
+      setSelectedId("");
+      setStructurePreview(true);
+      setMessage(
+        `已生成 ${next.shelves.length} 层 × ${structure.columns} 列结构预览；刷新场景可恢复库存记录。`,
+      );
+    });
   }
   const selected = scene?.items.find((i) => i.id === selectedId);
   const shown =
@@ -90,8 +129,16 @@ export default function App() {
           </button>
         </section>
         <div className="sample-banner">
-          <span>合成演示数据</span>非照片识别结果 · 当前使用 6
-          件虚拟物品验证接口 · 视觉模型尚未接入
+          {structurePreview ? (
+            <>
+              <span>结构预览</span>当前画面由结构建模生成，未写入库存；刷新场景可恢复演示数据
+            </>
+          ) : (
+            <>
+              <span>合成演示数据</span>非照片识别结果 · 当前使用 6
+              件虚拟物品验证接口 · 视觉模型尚未接入
+            </>
+          )}
         </div>
         {error && (
           <div className="notice error" role="alert">
@@ -213,7 +260,10 @@ export default function App() {
                     生活
                   </span>
                   <span className="caption-end">
-                    双层柜体 · 900 × 400 mm / 层
+                    {scene.shelves.length} 层 · {scene.shelves[0].columns} 列 ·{" "}
+                    {Math.max(...scene.shelves.map((s) => s.size.width))} ×{" "}
+                    {Math.max(...scene.shelves.map((s) => s.size.depth))} mm /
+                    层
                   </span>
                 </div>
               </section>
@@ -310,6 +360,107 @@ export default function App() {
                 )}
               </aside>
             </div>
+            <section className="structure panel" aria-label="结构建模">
+              <div className="structure-copy">
+                <div className="eyebrow">CABINET BUILDER</div>
+                <h2>结构建模</h2>
+                <p>
+                  输入柜体外部尺寸与层列数，生成带竖向隔板的格子骨架。只替换当前预览，不写入库存。
+                </p>
+                {structurePreview && (
+                  <p className="structure-note">
+                    当前为结构预览；生成布局建议前请先刷新场景，恢复已记录的物品。
+                  </p>
+                )}
+              </div>
+              <form
+                className="structure-form"
+                onSubmit={(event) => void buildStructure(event)}
+              >
+                <label>
+                  行数
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    step={1}
+                    value={structure.rows}
+                    onChange={(e) => updateStructure("rows", e.target.value)}
+                  />
+                </label>
+                <label>
+                  列数
+                  <input
+                    type="number"
+                    min={1}
+                    max={4}
+                    step={1}
+                    value={structure.columns}
+                    onChange={(e) =>
+                      updateStructure("columns", e.target.value)
+                    }
+                  />
+                </label>
+                <label>
+                  外宽 mm
+                  <input
+                    type="number"
+                    min={1}
+                    max={10000}
+                    step={1}
+                    value={structure.width}
+                    onChange={(e) => updateStructure("width", e.target.value)}
+                  />
+                </label>
+                <label>
+                  外深 mm
+                  <input
+                    type="number"
+                    min={1}
+                    max={10000}
+                    step={1}
+                    value={structure.depth}
+                    onChange={(e) => updateStructure("depth", e.target.value)}
+                  />
+                </label>
+                <label>
+                  外高 mm
+                  <input
+                    type="number"
+                    min={1}
+                    max={10000}
+                    step={1}
+                    value={structure.height}
+                    onChange={(e) => updateStructure("height", e.target.value)}
+                  />
+                </label>
+                <label>
+                  板厚 mm
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={structure.board}
+                    onChange={(e) => updateStructure("board", e.target.value)}
+                  />
+                </label>
+                <label>
+                  隔板厚 mm
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={structure.divider}
+                    onChange={(e) => updateStructure("divider", e.target.value)}
+                  />
+                </label>
+                <button className="primary" type="submit" disabled={busy}>
+                  生成结构场景
+                </button>
+              </form>
+            </section>
             <div className="bottom-grid">
               <section className="planning panel">
                 <div>
@@ -319,7 +470,7 @@ export default function App() {
                 </div>
                 <button
                   className="primary"
-                  disabled={busy}
+                  disabled={busy || structurePreview}
                   onClick={() =>
                     void run(async () => {
                       const result = await api.plan(scene.version);
