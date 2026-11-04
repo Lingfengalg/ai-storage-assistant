@@ -40,3 +40,6 @@ build/
 .DS_Store
 Thumbs.db
 ~$*
+*.egg-info/
+/backend/data/local/
+/data/local/
