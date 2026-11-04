@@ -96,6 +96,32 @@ class StructureRequest(Model):
     divider: int = Field(default=18, ge=0, le=100, strict=True)
 
 
+class ActivateSceneRequest(Mutation):
+    scene_id: str
+
+
+class SceneSummary(Model):
+    """Bounded library entry; counts keep the list light even with many scenes."""
+
+    id: str
+    name: str
+    version: int
+    shelves: int
+    columns: int
+    items: int
+    active: bool
+
+
+class SceneLibrary(Model):
+    active: Scene
+    library: list[SceneSummary]
+
+
+class CreateSceneResponse(Model):
+    scene: Scene
+    skipped_item_ids: list[str]
+
+
 class Plan(Model):
     id: str
     input_version: int

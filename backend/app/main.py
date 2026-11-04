@@ -2,17 +2,23 @@ import json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from .geometry import validate_layout
 from .models import (
+    ActivateSceneRequest,
     ApplyRequest,
+    CreateSceneResponse,
     InventoryRequest,
+    Item,
     LockRequest,
     Plan,
     Scene,
+    SceneLibrary,
+    SceneSummary,
     Shelf,
     Size,
     StructureRequest,
@@ -20,6 +26,86 @@ from .models import (
 )
 from .planning import plan_scene
 from .store import DomainError, Store
+
+
+def _structure_shelves(body: StructureRequest) -> list[Shelf]:
+    """Derive a multi-column cabinet skeleton from the external dimensions."""
+    inner_width = body.width - 2 * body.board
+    inner_depth = body.depth - body.board
+    net_height = (body.height - (body.rows + 1) * body.board) // body.rows
+    if inner_width <= 0 or inner_depth <= 0:
+        raise DomainError("外部尺寸不足以容纳板厚", 422)
+    if net_height < 100:
+        raise DomainError("每层净高不足 100 mm，请增加外高或减少层数", 422)
+    if inner_width - (body.columns - 1) * body.divider <= 0:
+        raise DomainError("内部宽度不足以容纳竖向隔板", 422)
+    return [
+        Shelf(
+            id=f"row-{index + 1}",
+            name=f"第 {index + 1} 层",
+            size=Size(width=inner_width, depth=inner_depth, height=net_height),
+            elevation=body.board + index * (net_height + body.board),
+            columns=body.columns,
+            divider=body.divider,
+        )
+        for index in range(body.rows)
+    ]
+
+
+def _relocate_stored_items(source: Scene, shelves: list[Shelf]) -> tuple[list[Item], list[str]]:
+    """Copy stored items into a new skeleton and keep whatever the greedy planner can fit.
+
+    Locks describe the old physical home, so trial layouts treat copies as movable; the
+    copied records keep their original flags. plan_scene returns no partial layout, so
+    unplaceable items are dropped from the input and the rest is planned again.
+    """
+    candidates = sorted(
+        (item.model_copy(deep=True) for item in source.items if item.status == "stored"),
+        key=lambda item: (-item.size.width * item.size.depth, item.id),
+    )
+    remaining = candidates
+    skipped: list[str] = []
+    placements = {}
+    while remaining:
+        trial = Scene(
+            id="planning-trial",
+            name="planning-trial",
+            version=1,
+            source="user",
+            shelves=shelves,
+            items=[item.model_copy(update={"movable": True}) for item in remaining],
+        )
+        plan = plan_scene(trial)
+        if plan.status == "FEASIBLE":
+            placements = plan.placements
+            break
+        failed_ids = set(plan.unplaced_item_ids)
+        failed = [item.id for item in remaining if item.id in failed_ids]
+        if not failed:
+            skipped.extend(item.id for item in remaining)
+            break
+        skipped.extend(failed)
+        remaining = [item for item in remaining if item.id not in failed_ids]
+    return (
+        [
+            item.model_copy(update={"placement": placements[item.id]})
+            for item in source.items
+            if item.status == "stored" and item.id in placements
+        ],
+        skipped,
+    )
+
+
+def _scene_summary(scene: Scene, active_id: str) -> SceneSummary:
+    return SceneSummary(
+        id=scene.id,
+        name=scene.name,
+        version=scene.version,
+        shelves=len(scene.shelves),
+        columns=max(shelf.columns for shelf in scene.shelves),
+        items=len(scene.items),
+        active=scene.id == active_id,
+    )
 
 
 def create_app(db_path: Path | None = None) -> FastAPI:
@@ -45,37 +131,34 @@ def create_app(db_path: Path | None = None) -> FastAPI:
     def read_scene():
         return store.scene()
 
-    @app.post("/api/scene/structure", response_model=Scene)
-    def build_structure(body: StructureRequest):
-        """Derive a multi-column cabinet skeleton; preview only, never written to the store."""
-        inner_width = body.width - 2 * body.board
-        inner_depth = body.depth - body.board
-        net_height = (body.height - (body.rows + 1) * body.board) // body.rows
-        if inner_width <= 0 or inner_depth <= 0:
-            raise DomainError("外部尺寸不足以容纳板厚", 422)
-        if net_height < 100:
-            raise DomainError("每层净高不足 100 mm，请增加外高或减少层数", 422)
-        if inner_width - (body.columns - 1) * body.divider <= 0:
-            raise DomainError("内部宽度不足以容纳竖向隔板", 422)
-        shelves = [
-            Shelf(
-                id=f"row-{index + 1}",
-                name=f"第 {index + 1} 层",
-                size=Size(width=inner_width, depth=inner_depth, height=net_height),
-                elevation=body.board + index * (net_height + body.board),
-                columns=body.columns,
-                divider=body.divider,
-            )
-            for index in range(body.rows)
-        ]
-        return Scene(
-            id=f"structure-{body.rows}x{body.columns}-{body.width}x{body.depth}x{body.height}",
+    @app.get("/api/scenes", response_model=SceneLibrary)
+    def list_scenes():
+        active = store.scene()
+        return SceneLibrary(
+            active=active,
+            library=[_scene_summary(scene, active.id) for scene in store.list_scenes()],
+        )
+
+    @app.post("/api/scenes", response_model=CreateSceneResponse)
+    def create_scene(body: StructureRequest):
+        """Create a new inactive library scene by copying the active inventory."""
+        source = store.scene()
+        shelves = _structure_shelves(body)
+        items, skipped = _relocate_stored_items(source, shelves)
+        scene = Scene(
+            id=f"structure-{uuid4()}",
             name=body.name,
             version=1,
             source="user",
             shelves=shelves,
-            items=[],
+            items=items,
         )
+        store.create_scene(scene)
+        return CreateSceneResponse(scene=scene, skipped_item_ids=skipped)
+
+    @app.post("/api/scenes/activate", response_model=Scene)
+    def activate_scene(body: ActivateSceneRequest):
+        return store.activate_scene(body.scene_id, body.request_id, body.expected_version)
 
     @app.post("/api/plans", response_model=Plan)
     def create_plan(body: VersionedRequest):

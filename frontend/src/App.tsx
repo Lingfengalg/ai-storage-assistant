@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { api, type InventoryEvent, type Plan, type Scene } from "./api/client";
+import {
+  api,
+  type InventoryEvent,
+  type Plan,
+  type Scene,
+  type SceneLibrary,
+  type SceneSummary,
+} from "./api/client";
 import SceneViewer from "./components/SceneViewer";
 import { categoryColors } from "./geometry";
 
@@ -26,23 +33,24 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [confirmApply, setConfirmApply] = useState(false);
   const [structure, setStructure] = useState(initialStructure);
-  const [structurePreview, setStructurePreview] = useState(false);
+  const [library, setLibrary] = useState<SceneLibrary | null>(null);
   const select = useCallback((id: string) => setSelectedId(id), []);
   async function refresh() {
-    const [next, history] = await Promise.all([api.scene(), api.events()]);
-    setScene(next);
+    const [next, history] = await Promise.all([api.library(), api.events()]);
+    setLibrary(next);
+    setScene(next.active);
     setEvents(history);
     setPlan(null);
     setPreview(false);
     setConfirmApply(false);
-    setStructurePreview(false);
   }
   useEffect(() => {
     let active = true;
-    Promise.all([api.scene(), api.events()])
+    Promise.all([api.library(), api.events()])
       .then(([next, history]) => {
         if (active) {
-          setScene(next);
+          setLibrary(next);
+          setScene(next.active);
           setEvents(history);
         }
       })
@@ -75,22 +83,60 @@ export default function App() {
   async function buildStructure(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await run(async () => {
-      const next = await api.structure({
+      const created = await api.createScene({
         name: `结构柜 · ${structure.rows} 层 × ${structure.columns} 列`,
         ...structure,
       });
-      setScene(next);
+      const next = await api.library();
+      setLibrary(next);
+      setScene(created.scene);
       setPlan(null);
       setPreview(false);
       setConfirmApply(false);
-      setSelectedId("");
-      setStructurePreview(true);
+      setSelectedId(created.scene.items[0]?.id ?? "");
+      const skipped = created.skipped_item_ids.length
+        ? `；${created.skipped_item_ids.length} 件物品放不下未迁入（${created.skipped_item_ids.join("、")}）`
+        : "";
       setMessage(
-        `已生成 ${next.shelves.length} 层 × ${structure.columns} 列结构预览；刷新场景可恢复库存记录。`,
+        `已创建场景「${created.scene.name}」并加入场景库：${created.scene.shelves.length} 层 × ${created.scene.shelves[0].columns} 列，${created.scene.items.length} 件物品已重新摆放${skipped}。`,
       );
     });
   }
+  async function activateScene(summary: SceneSummary) {
+    await run(async () => {
+      if (!library) return;
+      await api.activate(summary.id, library.active.version);
+      await refresh();
+      setMessage(`已切换到「${summary.name}」，可以基于该场景生成收纳建议。`);
+    });
+  }
+  async function generatePlan() {
+    await run(async () => {
+      if (!scene) return;
+      // POST /api/plans always plans the active scene. Switching scenes is an explicit
+      // user action, so a preview never silently activates itself here.
+      if (library && scene.id !== library.active.id) {
+        setMessage("当前显示的是场景预览，请先在场景库中切换到此场景，再生成建议。");
+        return;
+      }
+      const result = await api.plan(scene.version);
+      setPlan(result);
+      setPreview(result.status === "FEASIBLE");
+      setConfirmApply(false);
+    });
+  }
+  function exitPreview() {
+    if (!library) return;
+    setScene(library.active);
+    setPlan(null);
+    setPreview(false);
+    setConfirmApply(false);
+    setSelectedId("");
+  }
   const selected = scene?.items.find((i) => i.id === selectedId);
+  const isPreview = Boolean(
+    scene && library && scene.id !== library.active.id,
+  );
   const shown =
     scene?.items.filter((i) =>
       `${i.name} ${i.category}`.includes(query.trim()),
@@ -129,9 +175,15 @@ export default function App() {
           </button>
         </section>
         <div className="sample-banner">
-          {structurePreview ? (
+          {isPreview ? (
             <>
-              <span>结构预览</span>当前画面由结构建模生成，未写入库存；刷新场景可恢复演示数据
+              <span>场景预览</span>预览中的场景尚未切换，当前库存场景仍是「
+              {library?.active.name}」；此状态下不会写入库存。
+            </>
+          ) : scene?.source === "user" ? (
+            <>
+              <span>结构场景</span>
+              当前场景由结构建模生成，物品位置为重新摆放的副本；其他场景仍保留在场景库。
             </>
           ) : (
             <>
@@ -157,6 +209,54 @@ export default function App() {
           </section>
         ) : (
           <>
+            {library && (
+              <section className="library panel" aria-label="场景库">
+                <div className="panel-heading">
+                  <h2>场景库</h2>
+                  <span>
+                    {library.library.length} 个场景 · 切换不会覆盖原场景库存
+                  </span>
+                </div>
+                <div className="library-list">
+                  {library.library.map((record) => {
+                    const current = record.id === library.active.id;
+                    const previewing = !current && record.id === scene.id;
+                    return (
+                      <article
+                        key={record.id}
+                        className={`scene-card${current ? " current" : ""}${
+                          previewing ? " previewing" : ""
+                        }`}
+                      >
+                        <div className="scene-card-copy">
+                          <strong>{record.name}</strong>
+                          <small>
+                            {record.shelves} 层 × {record.columns} 列 ·{" "}
+                            {record.items} 件物品 · v{record.version}
+                          </small>
+                        </div>
+                        {current ? (
+                          isPreview ? (
+                            <button disabled={busy} onClick={exitPreview}>
+                              返回当前场景
+                            </button>
+                          ) : (
+                            <span className="scene-badge">当前场景</span>
+                          )
+                        ) : (
+                          <button
+                            disabled={busy}
+                            onClick={() => void activateScene(record)}
+                          >
+                            切换到此场景
+                          </button>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
             <div className="workspace">
               <aside className="inventory panel">
                 <div className="panel-heading">
@@ -324,7 +424,7 @@ export default function App() {
                     )}
                     <button
                       className="wide"
-                      disabled={busy || selected.status !== "stored"}
+                      disabled={busy || isPreview || selected.status !== "stored"}
                       onClick={() =>
                         void run(async () => {
                           await api.lock(selected, scene.version);
@@ -339,6 +439,7 @@ export default function App() {
                       className="wide primary"
                       disabled={
                         busy ||
+                        isPreview ||
                         (!selected.movable && selected.status === "stored")
                       }
                       onClick={() =>
@@ -365,13 +466,8 @@ export default function App() {
                 <div className="eyebrow">CABINET BUILDER</div>
                 <h2>结构建模</h2>
                 <p>
-                  输入柜体外部尺寸与层列数，生成带竖向隔板的格子骨架。只替换当前预览，不写入库存。
+                  输入柜体外部尺寸与层列数，生成带竖向隔板的新场景并加入场景库。当前场景不会被覆盖；在库物品会从当前活动场景复制并重新摆放，放不下的会跳过。
                 </p>
-                {structurePreview && (
-                  <p className="structure-note">
-                    当前为结构预览；生成布局建议前请先刷新场景，恢复已记录的物品。
-                  </p>
-                )}
               </div>
               <form
                 className="structure-form"
@@ -470,18 +566,16 @@ export default function App() {
                 </div>
                 <button
                   className="primary"
-                  disabled={busy || structurePreview}
-                  onClick={() =>
-                    void run(async () => {
-                      const result = await api.plan(scene.version);
-                      setPlan(result);
-                      setPreview(result.status === "FEASIBLE");
-                      setConfirmApply(false);
-                    })
-                  }
+                  disabled={busy || isPreview}
+                  onClick={() => void generatePlan()}
                 >
                   {busy ? "处理中…" : "生成收纳建议"}
                 </button>
+                {isPreview && (
+                  <p className="plan-hint">
+                    预览场景：先在场景库中切换到此场景，才能基于它生成建议。
+                  </p>
+                )}
                 {plan && (
                   <div className="plan-result" role="status">
                     <strong>
@@ -503,7 +597,7 @@ export default function App() {
                           我已按建议实际摆放物品，并核对拿取与稳定性
                         </label>
                         <button
-                          disabled={busy || !confirmApply}
+                          disabled={busy || isPreview || !confirmApply}
                           onClick={() =>
                             void run(async () => {
                               await api.apply(plan, scene.version);
@@ -533,11 +627,18 @@ export default function App() {
                     {events.slice(0, 4).map((event) => (
                       <li key={event.request_id}>
                         <span>
-                          {event.operation.route === "inventory"
-                            ? `${event.operation.action === "take" ? "取出" : "归还"} · ${scene.items.find((i) => i.id === event.operation.item_id)?.name ?? event.operation.item_id}`
-                            : event.operation.route.startsWith("apply/")
-                              ? "确认收纳布局"
-                              : "更新可移动性"}
+                          {event.operation.action === "activate_scene"
+                            ? `切换场景 · ${
+                                library?.library.find(
+                                  (record) =>
+                                    record.id === event.operation.scene_id,
+                                )?.name ?? event.operation.scene_id
+                              }`
+                            : event.operation.route === "inventory"
+                              ? `${event.operation.action === "take" ? "取出" : "归还"} · ${scene.items.find((i) => i.id === event.operation.item_id)?.name ?? event.operation.item_id}`
+                              : event.operation.route?.startsWith("apply/")
+                                ? "确认收纳布局"
+                                : "更新可移动性"}
                         </span>
                         <time>
                           {new Date(event.created_at).toLocaleTimeString(
