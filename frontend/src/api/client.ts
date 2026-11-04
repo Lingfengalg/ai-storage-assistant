@@ -5,9 +5,17 @@ export type Item = components["schemas"]["Item"];
 export type Placement = components["schemas"]["Placement"];
 export type Plan = components["schemas"]["Plan"];
 export type StructureRequest = components["schemas"]["StructureRequest"];
+export type SceneSummary = components["schemas"]["SceneSummary"];
+export type SceneLibrary = components["schemas"]["SceneLibrary"];
+export type CreateSceneResponse = components["schemas"]["CreateSceneResponse"];
 export type InventoryEvent = {
   request_id: string;
-  operation: { route: string; action?: string; item_id?: string };
+  operation: {
+    route?: string;
+    action?: string;
+    item_id?: string;
+    scene_id?: string;
+  };
   created_at: string;
 };
 
@@ -35,9 +43,18 @@ export async function request<T>(
 
 export const api = {
   scene: () => request<Scene>("/scene"),
+  library: () => request<SceneLibrary>("/scenes"),
   events: () => request<InventoryEvent[]>("/inventory/events"),
   plan: (version: number) =>
     request<Plan>("/plans", { expected_version: version }),
+  createScene: (body: StructureRequest) =>
+    request<CreateSceneResponse>("/scenes", body),
+  activate: (sceneId: string, version: number) =>
+    request<Scene>("/scenes/activate", {
+      scene_id: sceneId,
+      request_id: crypto.randomUUID(),
+      expected_version: version,
+    }),
   inventory: (item: Item, version: number) =>
     request<Scene>("/inventory/events", {
       request_id: crypto.randomUUID(),
@@ -55,8 +72,6 @@ export const api = {
       },
       "PATCH",
     ),
-  structure: (body: StructureRequest) =>
-    request<Scene>("/scene/structure", body),
   apply: (plan: Plan, version: number) =>
     request<Scene>(`/plans/${plan.id}/apply`, {
       request_id: crypto.randomUUID(),

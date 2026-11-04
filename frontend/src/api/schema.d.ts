@@ -38,7 +38,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/scene/structure": {
+    "/api/scenes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Scenes */
+        get: operations["list_scenes_api_scenes_get"];
+        put?: never;
+        /**
+         * Create Scene
+         * @description Create a new inactive library scene by copying the active inventory.
+         */
+        post: operations["create_scene_api_scenes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scenes/activate": {
         parameters: {
             query?: never;
             header?: never;
@@ -47,11 +68,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Build Structure
-         * @description Derive a multi-column cabinet skeleton; preview only, never written to the store.
-         */
-        post: operations["build_structure_api_scene_structure_post"];
+        /** Activate Scene */
+        post: operations["activate_scene_api_scenes_activate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -148,6 +166,15 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ActivateSceneRequest */
+        ActivateSceneRequest: {
+            /** Expected Version */
+            expected_version: number;
+            /** Request Id */
+            request_id: string;
+            /** Scene Id */
+            scene_id: string;
+        };
         /** ApplyRequest */
         ApplyRequest: {
             /** Expected Version */
@@ -159,6 +186,12 @@ export interface components {
              * @constant
              */
             execution_confirmed: true;
+        };
+        /** CreateSceneResponse */
+        CreateSceneResponse: {
+            scene: components["schemas"]["Scene"];
+            /** Skipped Item Ids */
+            skipped_item_ids: string[];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -293,6 +326,32 @@ export interface components {
             /** Items */
             items: components["schemas"]["Item"][];
         };
+        /** SceneLibrary */
+        SceneLibrary: {
+            active: components["schemas"]["Scene"];
+            /** Library */
+            library: components["schemas"]["SceneSummary"][];
+        };
+        /**
+         * SceneSummary
+         * @description Bounded library entry; counts keep the list light even with many scenes.
+         */
+        SceneSummary: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Version */
+            version: number;
+            /** Shelves */
+            shelves: number;
+            /** Columns */
+            columns: number;
+            /** Items */
+            items: number;
+            /** Active */
+            active: boolean;
+        };
         /** Shelf */
         Shelf: {
             /** Id */
@@ -417,7 +476,27 @@ export interface operations {
             };
         };
     };
-    build_structure_api_scene_structure_post: {
+    list_scenes_api_scenes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SceneLibrary"];
+                };
+            };
+        };
+    };
+    create_scene_api_scenes_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -427,6 +506,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["StructureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateSceneResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_scene_api_scenes_activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActivateSceneRequest"];
             };
         };
         responses: {

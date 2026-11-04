@@ -103,9 +103,9 @@ def test_planner_keeps_compartments_separate():
     assert validate_layout(scene, plan.placements) == []
 
 
-def test_structure_endpoint_derives_rows_columns_and_clearance(client):
+def test_create_scene_derives_rows_columns_and_clearance(client):
     response = client.post(
-        "/api/scene/structure",
+        "/api/scenes",
         json={
             "name": "两列两层测试柜",
             "rows": 2,
@@ -118,9 +118,8 @@ def test_structure_endpoint_derives_rows_columns_and_clearance(client):
         },
     )
     assert response.status_code == 200
-    scene = response.json()
+    scene = response.json()["scene"]
     assert scene["source"] == "user"
-    assert scene["items"] == []
     assert len(scene["shelves"]) == 2
     assert [s["elevation"] for s in scene["shelves"]] == [18, 459]
     for record in scene["shelves"]:
@@ -132,7 +131,7 @@ def test_structure_endpoint_derives_rows_columns_and_clearance(client):
     Scene.model_validate(scene)
 
 
-def test_structure_endpoint_rejects_impossible_cabinet(client):
+def test_create_scene_rejects_impossible_cabinet(client):
     base = {
         "name": "测试柜",
         "rows": 2,
@@ -144,10 +143,10 @@ def test_structure_endpoint_rejects_impossible_cabinet(client):
         "divider": 18,
     }
     low_clearance = {**base, "rows": 3, "height": 300}  # (300 - 72) // 3 == 76 mm.
-    assert client.post("/api/scene/structure", json=low_clearance).status_code == 422
+    assert client.post("/api/scenes", json=low_clearance).status_code == 422
     too_narrow = {**base, "width": 20}  # Outer width cannot even hold two 18 mm boards.
-    assert client.post("/api/scene/structure", json=too_narrow).status_code == 422
+    assert client.post("/api/scenes", json=too_narrow).status_code == 422
     divider_overflow = {**base, "width": 90, "columns": 4}  # Usable width 54-54 == 0.
-    assert client.post("/api/scene/structure", json=divider_overflow).status_code == 422
+    assert client.post("/api/scenes", json=divider_overflow).status_code == 422
     invalid_rows = {**base, "rows": 0}
-    assert client.post("/api/scene/structure", json=invalid_rows).status_code == 422
+    assert client.post("/api/scenes", json=invalid_rows).status_code == 422
