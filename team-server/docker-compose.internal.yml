@@ -1,0 +1,27 @@
+services:
+  # 无域名模式：不跑 Caddy，服务端口直接绑到 Tailscale / 内网地址。
+  # 用法：.env 里设置 TEAM_BIND_IP（服务器 tailscale ip -4 的结果），
+  #       docker compose -f docker-compose.internal.yml up -d --build
+  team-server:
+    build:
+      context: .
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    restart: unless-stopped
+    environment:
+      TEAM_DB: /data/team.db
+      TEAM_ADMIN_TOKEN: ${TEAM_ADMIN_TOKEN:?set TEAM_ADMIN_TOKEN in .env}
+      TEAM_LEASE_MINUTES: ${TEAM_LEASE_MINUTES:-90}
+    volumes:
+      - team-data:/data
+    ports:
+      - "${TEAM_BIND_IP:?set TEAM_BIND_IP to the Tailscale or LAN IP}:8765:8765"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  team-data:

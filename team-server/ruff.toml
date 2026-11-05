@@ -1,0 +1,9 @@
+# 协调服务的本地 lint 约定。
+# B008：FastAPI 依赖注入的 Depends(...) 默认参数是官方写法；
+# SIM117：事务显式写成 `with self._conn() as conn, immediate(conn):` 之外的嵌套形式
+#         是为了让"先拿连接、再开写事务"两步清楚可见，不合并。
+line-length = 110
+target-version = "py312"
+
+[lint]
+ignore = ["B008", "SIM117"]

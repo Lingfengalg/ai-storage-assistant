@@ -1,0 +1,41 @@
+services:
+  team-server:
+    build:
+      context: .
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    restart: unless-stopped
+    environment:
+      TEAM_DB: /data/team.db
+      TEAM_ADMIN_TOKEN: ${TEAM_ADMIN_TOKEN:?set TEAM_ADMIN_TOKEN in .env}
+      TEAM_LEASE_MINUTES: ${TEAM_LEASE_MINUTES:-90}
+    volumes:
+      - team-data:/data
+    ports:
+      - "127.0.0.1:8765:8765"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - team-server
+    environment:
+      TEAM_DOMAIN: ${TEAM_DOMAIN:-team.example.com}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  team-data:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,17 @@
+# 把这段追加到每台机器当前 DSH profile 的 cordis.patch.yml
+# （%USERPROFILE%\.dsh\profiles\<profile>\cordis.patch.yml，通常是 desktop 或 web）
+# 路径换成该机器上仓库 clone 的实际位置；token 走环境变量，不写进文件。
+- insert:
+    - id: mcp-team
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: team
+        transport: stdio
+        command: C:/Users/<you>/Documents/ChatGPT/雏雁/.venv/Scripts/python.exe
+        args: ['C:/Users/<you>/Documents/ChatGPT/雏雁/team-server/mcp_server.py']
+        env:
+          # 无域名/Tailscale 模式可用 http://100.x.y.z:8765（tailnet 内已由 WireGuard 加密）
+          TEAM_URL: https://team.example.com
+          TEAM_TOKEN: !!js process.env.TEAM_TOKEN
+        toolCallTimeoutMs: 15000
+        failOnStartupError: false

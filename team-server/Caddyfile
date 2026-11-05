@@ -1,0 +1,6 @@
+# 域名由 .env 的 TEAM_DOMAIN 决定，Caddy 自动申请/续期证书。
+# - 自有域名：TEAM_DOMAIN=team.example.com（A 记录指向服务器）
+# - 只有公网 IP：TEAM_DOMAIN=203.0.113.7.sslip.io（sslip.io 自动解析到该 IP，无需买域名）
+{$TEAM_DOMAIN:team.example.com} {
+    reverse_proxy team-server:8765
+}

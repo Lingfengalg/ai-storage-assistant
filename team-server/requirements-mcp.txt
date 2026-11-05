@@ -1,0 +1,2 @@
+# Only needed on the five agent machines if they use the MCP adapter.
+mcp>=2.0
